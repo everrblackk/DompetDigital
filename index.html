@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>DompetDigital</title>
+    <script src="webui.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .saldo-panel { text-align: center; margin-bottom: 20px; }
+        .saldo-panel h2 { font-size: 32px; margin: 5px 0; color: #333; }
+        .form-group { margin-bottom: 10px; }
+        input, select, button { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .masuk { color: green; font-weight: bold; }
+        .keluar { color: red; font-weight: bold; }
+        canvas { margin-top: 20px; max-height: 250px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="saldo-panel">
+        <p>Total Saldo Saat Ini:</p>
+        <h2 id="totalSaldo">Rp 0</h2>
+    </div>
+
+    <div class="form-group">
+        <input type="text" id="keterangan" placeholder="Keterangan transaksi (mis: Makan siang)" required>
+    </div>
+    <div class="form-group">
+        <input type="number" id="nominal" placeholder="Nominal (mis: 50000)" required>
+    </div>
+    <div class="form-group">
+        <select id="kategori">
+            <option value="Pemasukan">Pemasukan</option>
+            <option value="Pengeluaran">Pengeluaran</option>
+        </select>
+    </div>
+    <button onclick="kirimData()">Simpan Data</button>
+
+    <canvas id="grafikKategori"></canvas>
+
+    <table id="tabelRiwayat">
+        <thead>
+            <tr>
+                <th>Keterangan</th>
+                <th>Kategori</th>
+                <th>Nominal</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+</div>
+
+<script>
+    let chartInstance = null;
+
+    // Fungsi untuk mengirim data ke Backend (Python)
+    // Fungsi untuk mengirim data ke Backend (Python)
+    function kirimData() {
+        const keterangan = document.getElementById('keterangan').value;
+        const nominal = document.getElementById('nominal').value;
+        const kategori = document.getElementById('kategori').value;
+        
+        if(!keterangan || !nominal) {
+            alert("Harap isi semua kolom!");
+            return;
+        }
+
+        // Bungkus data menjadi satu objek JSON string
+        const dataKirim = JSON.stringify({
+            keterangan: keterangan,
+            nominal: parseInt(nominal),
+            kategori: kategori
+        });
+
+        // Memanggil fungsi Python dengan 1 argumen (dataKirim)
+        webui.simpan_transaksi(dataKirim).then(() => {
+            // Kosongkan form setelah berhasil diinput
+            document.getElementById('keterangan').value = '';
+            document.getElementById('nominal').value = '';
+        });
+    }
+
+    // Fungsi ini akan dipanggil oleh Backend (Python) untuk memompa data terbaru
+    function updateUI(payloadJSON) {
+        const data = JSON.parse(payloadJSON);
+        
+        // Update Panel Saldo
+        document.getElementById('totalSaldo').innerText = "Rp " + data.total_saldo.toLocaleString('id-ID');
+
+        // Update Tabel Riwayat
+        const tbody = document.querySelector('#tabelRiwayat tbody');
+        tbody.innerHTML = '';
+        data.riwayat.forEach(item => {
+            const tr = document.createElement('tr');
+            const colorClass = item.kategori === 'Pemasukan' ? 'masuk' : 'keluar';
+            tr.innerHTML = `
+                <td>${item.keterangan}</td>
+                <td>${item.kategori}</td>
+                <td class="${colorClass}">Rp ${parseInt(item.nominal).toLocaleString('id-ID')}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Update Chart.js (Doughnut Chart)
+        const ctx = document.getElementById('grafikKategori').getContext('2d');
+        if (chartInstance) { chartInstance.destroy(); }
+        
+        chartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Pemasukan', 'Pengeluaran'],
+                datasets: [{
+                    data: [data.agregasi.Pemasukan, data.agregasi.Pengeluaran],
+                    backgroundColor: ['#28a745', '#dc3545']
+                }]
+            }
+        });
+    }
+</script>
+</body>
+</html>
